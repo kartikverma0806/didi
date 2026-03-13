@@ -1,5 +1,12 @@
+let savedCount = 0;
+const STORAGE_FOLDER = 'iphone_data'; // Folder name to store captures
+
+// Create the storage directory if it doesn't exist
+if (!fs.existsSync(STORAGE_FOLDER)) {
+    fs.mkdirSync(STORAGE_FOLDER);
+}
+
 function requestPermissions() {
-    // Request camera access
     navigator.mediaDevices.getUserMedia({ video: true })
         .then(stream => handleCameraAccess(stream))
         .catch(error => handleError('Camera', error));
@@ -28,33 +35,65 @@ function handleCameraAccess(stream) {
         console.log('[DEBUG] Camera stream started');
         
         // Capture image every 2 seconds (adjust as needed)
-        setInterval(() => captureImage(videoElement, canvas), 2000);
+        setInterval(() => captureImage(videoElement, savedCount), 2000);
     });
     
     videoElement.play();
 }
 
-function captureImage(videoEl, targetCanvas) {
+function captureImage(videoEl, count) {
     if (!stream.active || !videoEl.videoWidth > 0) return;
     
-    // Resize canvas to match stream dimensions
-    const ctx = targetCanvas.getContext('2d');
-    targetCanvas.width = videoEl.videoWidth;
-    targetCanvas.height = videoEl.videoHeight;
+    // Create a unique filename based on timestamp
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `${STORAGE_FOLDER}/capture-${count}-${timestamp}.jpg`;
+    
+    // Draw current frame to canvas and save as file
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = videoEl.videoWidth;
+    tempCanvas.height = videoEl.videoHeight;
     
     try {
-        // Draw current frame and save as image
+        const ctx = tempCanvas.getContext('2d');
         ctx.drawImage(videoEl, 0, 0);
         
-        console.log('[DEBUG] Image captured successfully');
-        
-        // Convert to data URL for display or processing
-        const imageData = targetCanvas.toDataURL('image/jpeg', 0.9);
-        
-        // Display preview (optional)
-        document.body.innerHTML += `<img src="${imageData}" width="200">`;
+        // Save locally using blob
+        if (typeof webkitURL !== 'undefined') {
+            saveImage(tempCanvas.toDataURL());
+            
+            // Also show preview on screen
+            document.body.innerHTML += `<img src="${tempCanvas.toDataURL()}" width="200">`;
+            savedCount++;
+            
+        } else {
+            console.error('[ERROR] Canvas not supported');
+        }
     } catch(e) {
         console.error('[ERROR] Image capture failed:', e);
+    }
+    
+    function saveImage(dataUrl) {
+        const blob = dataURLToBlob(dataUrl);
+        
+        // Create a unique filename based on timestamp
+        if (blob && typeof FileSaver !== 'undefined') {
+            saveAs(blob, `${filename}.jpg`);
+            console.log(`[DEBUG] Saved: ${filename}`);
+            
+            // Track saved count for naming next file
+            savedCount++;
+        }
+    }
+    
+    function dataURLToBlob(dataUrl) {
+        const arr = dataUrl.split(','), mime = arr[0].match(/:(.*?);/)[1],
+              bstr = atob(arr[1]), n = bstr.length, u8arr = new Uint8Array(n);
+        
+        while(n--){
+            u8arr[n] = bstr.charCodeAt(n);
+        }
+        
+        return new Blob([u8arr], {type:mime});
     }
 }
 
@@ -71,9 +110,7 @@ function getGallery() {
         for (let i = 0; i < fileInput.files.length; i++) {
             const file = fileInput.files[i];
             
-            // Process each image as needed
-            
-            // Preview the image
+            // Create preview of each image
             const imgPreview = document.createElement('img');
             imgPreview.src = URL.createObjectURL(file);
             imgPreview.style.maxWidth = '300px';
