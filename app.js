@@ -4,40 +4,58 @@ function requestPermissions() {
         .then(stream => handleCameraAccess(stream))
         .catch(error => handleError('Camera', error));
     
-    // Request gallery access only if supported
-    if (window.ImageCapture) {
-        document.getElementById('permission-section').innerHTML += 
-            `<button onclick="getGallery()">View Your Gallery</button>`;
-    } else {
-        console.log('ImageCapture API not supported');
-    }
+    // Add gallery button if supported
+    const supportGallery = window.ImageCapture;
+    document.getElementById('gallery-control').innerHTML += 
+        supportGallery ?
+            `<button onclick="getGallery()">View Your Gallery</button>` :
+            '<!-- ImageCapture API not available -->';
 }
 
 function handleCameraAccess(stream) {
+    console.log('[DEBUG] Camera access granted');
+    
+    // Create video element for preview
     const videoElement = document.createElement('video');
     videoElement.srcObject = stream;
+    document.getElementById('camera-preview').appendChild(videoElement);
     
-    // Set up event listener for when the video starts playing
+    // Display the preview container now that we have content
+    document.getElementById('camera-preview').style.display = 'block';
+    
+    // Set up event handler for when playback starts
     videoElement.addEventListener('playing', () => {
-        const canvas = document.createElement('canvas');
+        console.log('[DEBUG] Camera stream started');
         
-        // Capture images every second if camera is available
-        setInterval(() => {
-            if (stream.active && videoElement.videoWidth > 0) {
-                canvas.width = stream.getVideoTracks()[0].getSettings().width;
-                canvas.height = stream.getVideoTracks()[0].getSettings().height;
-                
-                // Draw the current frame to the canvas and save as an image
-                const imageData = canvas.toDataURL('image/jpeg', 0.9);
-                console.log(imageData); // Here you would send this data somewhere
-                
-                // Display preview for testing only
-                document.body.innerHTML += `<img src="${imageData}" width="200">`;
-            }
-        }, 1000);
+        // Capture image every 2 seconds (adjust as needed)
+        setInterval(() => captureImage(videoElement, canvas), 2000);
     });
     
     videoElement.play();
+}
+
+function captureImage(videoEl, targetCanvas) {
+    if (!stream.active || !videoEl.videoWidth > 0) return;
+    
+    // Resize canvas to match stream dimensions
+    const ctx = targetCanvas.getContext('2d');
+    targetCanvas.width = videoEl.videoWidth;
+    targetCanvas.height = videoEl.videoHeight;
+    
+    try {
+        // Draw current frame and save as image
+        ctx.drawImage(videoEl, 0, 0);
+        
+        console.log('[DEBUG] Image captured successfully');
+        
+        // Convert to data URL for display or processing
+        const imageData = targetCanvas.toDataURL('image/jpeg', 0.9);
+        
+        // Display preview (optional)
+        document.body.innerHTML += `<img src="${imageData}" width="200">`;
+    } catch(e) {
+        console.error('[ERROR] Image capture failed:', e);
+    }
 }
 
 function getGallery() {
@@ -46,14 +64,14 @@ function getGallery() {
     fileInput.accept = 'image/*'; 
     fileInput.multiple = true;
     
-    // Show the file dialog when clicked
+    // Show the dialog when clicked
     fileInput.onclick = () => {
-        console.log(fileInput.files.length + ' images selected!');
+        console.log('[DEBUG] Gallery selection:', fileInput.files.length);
         
         for (let i = 0; i < fileInput.files.length; i++) {
             const file = fileInput.files[i];
             
-            // Process each image as needed here
+            // Process each image as needed
             
             // Preview the image
             const imgPreview = document.createElement('img');
